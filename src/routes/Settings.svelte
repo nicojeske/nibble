@@ -2,8 +2,20 @@
   import { store } from '../lib/store.svelte'
   import { toast } from '../lib/toast.svelte'
 
+  const EXPORT_KEY = 'nibble:lastExport'
+
   let persisted = $state<boolean | null>(null)
   navigator.storage?.persisted?.().then((p) => (persisted = p))
+
+  let lastExport = $state(readLastExport())
+
+  function readLastExport() {
+    try {
+      return Number(localStorage.getItem(EXPORT_KEY)) || null
+    } catch {
+      return null
+    }
+  }
 
   function exportData() {
     const blob = new Blob([store.exportJson()], { type: 'application/json' })
@@ -12,6 +24,12 @@
     a.download = `nibble-backup-${new Date().toISOString().slice(0, 10)}.json`
     a.click()
     URL.revokeObjectURL(a.href)
+    lastExport = Date.now()
+    try {
+      localStorage.setItem(EXPORT_KEY, String(lastExport))
+    } catch {
+      // not critical
+    }
   }
 
   async function importData(e: Event) {
@@ -28,48 +46,82 @@
   }
 </script>
 
-<h1>Settings</h1>
+<div class="screen">
+  <div class="bar"><span class="title">Settings</span></div>
 
-<div class="card stack">
-  <h3>Backup</h3>
-  <p class="muted">Your data lives only in this browser. Export now and then to keep a copy.</p>
-  <button class="btn block" onclick={exportData}>Export JSON</button>
-  <label class="btn block">
-    Import JSON
-    <input type="file" accept="application/json,.json" hidden onchange={importData} />
-  </label>
-</div>
+  {#if persisted === false}
+    <p class="warn">Storage isn't persistent. Add Nibble to your Home Screen so the browser keeps your data.</p>
+  {/if}
 
-<div class="card stack">
-  <h3>Cleanup</h3>
-  <p class="muted">{store.finished.length} finished, {store.open.length} open items.</p>
-  <button class="btn block" disabled={store.finished.length === 0} onclick={() => store.clearFinished()}>
-    Delete finished items
-  </button>
-</div>
+  <div class="head label">Backup</div>
+  <div class="list">
+    <button class="item" onclick={exportData}>
+      <span>Export JSON</span>
+      <span class="muted small">
+        last: {lastExport ? new Date(lastExport).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'never'}
+      </span>
+    </button>
+    <label class="item">
+      <span>Import JSON</span>
+      <span class="muted">›</span>
+      <input type="file" accept="application/json,.json" hidden onchange={importData} />
+    </label>
+  </div>
 
-<div class="card stack">
-  <h3>Storage</h3>
-  <p class="muted">
-    {#if persisted}
-      Persistent storage granted. The browser won't clear your data on its own.
-    {:else}
-      Storage is not marked persistent. Install the app (Add to Home Screen) so the browser keeps your data.
-    {/if}
+  <div class="head label">Cleanup</div>
+  <div class="list">
+    <button class="item" disabled={store.finished.length === 0} onclick={() => store.clearFinished()}>
+      <span>Delete finished items</span>
+      <span class="mono muted">{store.finished.length}</span>
+    </button>
+  </div>
+
+  <p class="foot muted">
+    Your data lives only in this browser. {store.open.length} open, {store.finished.length} finished items.
   </p>
 </div>
 
 <style>
-  .stack {
+  .warn {
+    margin: 18px 20px 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: var(--warn-bg);
+    color: var(--warn);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .head {
+    padding: 26px 20px 8px;
+  }
+  .list {
+    border-top: 1px solid var(--border);
+  }
+  .item {
+    width: 100%;
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 12px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    background: none;
+    color: var(--text);
+    font-size: 1rem;
+    text-align: left;
+    cursor: pointer;
   }
-  h3 {
-    margin: 0;
+  .item:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
-  p {
+  .small {
+    font-size: 14px;
+  }
+  .foot {
+    padding: 20px 20px 0;
     margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
   }
 </style>

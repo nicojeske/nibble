@@ -32,3 +32,16 @@ export function fmtDay(key: string): string {
   if (date.toDateString() === new Date(Date.now() - 864e5).toDateString()) return 'Yesterday'
   return date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
 }
+
+/** Receipt-style stamp: "SAT 10 OCT 18:02", or "SAT 18:02" when `short`. */
+export function fmtStamp(ts: number, short = false): string {
+  const d = new Date(ts)
+  const weekday = d.toLocaleDateString(undefined, { weekday: 'short' }).replace('.', '')
+  const date = short ? '' : ` ${d.getDate()} ${d.toLocaleDateString(undefined, { month: 'short' }).replace('.', '')}`
+  return `${weekday}${date} ${fmtTime(ts)}`.toUpperCase()
+}
+
+/** Number only, for the clipboard and big readouts: "44" or "12.5". */
+export function fmtNum(n: number): string {
+  return n.toLocaleString(undefined, { maximumFractionDigits: 1, useGrouping: false })
+}

@@ -1,34 +1,46 @@
 :root {
   --bg: #f6f5f2;
   --surface: #ffffff;
-  --text: #1d1c1a;
-  --muted: #6d6a64;
   --border: #e3e0da;
-  --accent: #d9480f;
-  --accent-text: #ffffff;
-  --accent-on-dark: #ffa94d;
+  --text: #1d1c1a;
+  --text-2: #4a4741;
+  --muted: #6d6a64;
+  --digit-dim: #d4d0c8;
+  --accent: #e8590c;
+  --on-accent: #ffffff;
+  --paper: #ece6da;
+  --ink: #121314;
+  --ink-2: #55524c;
+  --rule: #9a958c;
+  --paper-edge: 0 0 0 1px var(--border), 0 6px 20px rgb(0 0 0 / 0.08);
+  --warn-bg: #fff4e6;
   --warn: #b35c00;
   --good: #2b8a3e;
-  --unlogged: #fff4e6;
+  --danger: #e03131;
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
   color-scheme: light dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--sans);
   line-height: 1.4;
   -webkit-tap-highlight-color: transparent;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161514;
-    --surface: #211f1d;
+    --bg: #0e0e0d;
+    --surface: #1a1918;
+    --border: #2c2a27;
     --text: #f1efea;
-    --muted: #9b978f;
-    --border: #34312d;
-    --accent: #ff8a3d;
-    --accent-text: #1d1c1a;
-    --accent-on-dark: #d9480f;
+    --text-2: #c9c5bd;
+    --muted: #8f8b83;
+    --digit-dim: #3a3835;
+    --accent: #ff7a2e;
+    --on-accent: #0e0e0d;
+    --paper-edge: none;
+    --warn-bg: #2a1d10;
     --warn: #ffb347;
-    --good: #69db7c;
-    --unlogged: #3a2a17;
+    --good: #2b8a3e;
+    --danger: #ff6b6b;
   }
 }
 
@@ -36,21 +48,16 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-}
-
-h1 {
-  font-size: 1.6rem;
-  margin: 8px 0 16px;
-}
-
-h2 {
-  font-size: 1.05rem;
-  margin: 24px 0 8px;
-  color: var(--muted);
+  overscroll-behavior: none;
 }
 
 button,
@@ -59,18 +66,22 @@ input {
   color: inherit;
 }
 
+button {
+  cursor: pointer;
+}
+
 input {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
   font-size: 1.1rem;
 }
 
 input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
+  outline: none;
+  border-color: var(--accent);
 }
 
 .btn {
@@ -78,19 +89,22 @@ input:focus {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-weight: 600;
-  cursor: pointer;
+  padding: 0 18px;
   min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .btn.primary {
+  min-height: 58px;
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--accent-text);
+  color: var(--on-accent);
+  font-weight: 700;
+  font-size: 1.05rem;
 }
 
 .btn.block {
@@ -98,23 +112,33 @@ input:focus {
 }
 
 .btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
+  cursor: default;
 }
 
 .link {
   background: none;
   border: none;
-  padding: 4px;
+  padding: 4px 0;
   color: var(--accent);
   font-weight: 600;
-  cursor: pointer;
+  text-decoration: none;
 }
 
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 16px;
+.link.dim {
+  color: var(--muted);
+}
+
+.label {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .muted {
@@ -132,6 +156,35 @@ input:focus {
   min-width: 0;
 }
 
+/* Full-height screen: header on top, controls pinned to the bottom. */
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  padding: 16px 20px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.title {
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.bottom {
+  margin-top: auto;
+  padding: 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 label.field {
   display: block;
   margin-bottom: 12px;
@@ -139,7 +192,5 @@ label.field {
 
 label.field > span {
   display: block;
-  font-size: 0.9rem;
-  color: var(--muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }

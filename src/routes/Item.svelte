@@ -1,46 +1,36 @@
 <script lang="ts">
   import BarcodeField from '../components/BarcodeField.svelte'
   import BarcodeView from '../components/BarcodeView.svelte'
-  import { eatenAt, lastWeight, parseGrams, totalEaten } from '../lib/calc'
+  import Numpad from '../components/Numpad.svelte'
+  import Receipt from '../components/Receipt.svelte'
+  import { saveWeigh } from '../lib/actions'
+  import { eatenAt, lastWeight, parseGrams, round, totalEaten } from '../lib/calc'
   import { go } from '../lib/router.svelte'
   import { store } from '../lib/store.svelte'
-  import { toast } from '../lib/toast.svelte'
-  import { copy, fmtGrams, fmtWhen } from '../lib/util'
+  import { fmtNum, fmtStamp, fmtTime, fmtWhen } from '../lib/util'
 
   let { id }: { id: string } = $props()
 
   const item = $derived(store.get(id))
 
-  let grams = $state('')
-  let finish = $state(false)
+  let typed = $state('')
   let showBarcode = $state(false)
   let editing = $state(false)
-  /** Id of the weigh just saved, to show the result card. */
-  let savedId = $state<string | null>(null)
+  let now = $state(Date.now())
 
-  const parsed = $derived(parseGrams(grams))
-  const preview = $derived(item && parsed !== null ? Math.round((lastWeight(item) - parsed) * 10) / 10 : null)
-  const saved = $derived.by(() => {
-    if (!item || !savedId) return null
-    const index = item.weighs.findIndex((w) => w.id === savedId)
-    return index > 0 ? { weigh: item.weighs[index], eaten: eatenAt(item, index) } : null
+  const grams = $derived(parseGrams(typed))
+  const preview = $derived(item && grams !== null ? round(lastWeight(item) - grams) : null)
+  const total = $derived(item ? round(totalEaten(item) + (preview ?? 0)) : 0)
+  const lastEaten = $derived(item && item.weighs.length > 1 ? eatenAt(item, item.weighs.length - 1) : undefined)
+
+  $effect(() => {
+    const t = setInterval(() => (now = Date.now()), 30_000)
+    return () => clearInterval(t)
   })
 
-  function submit(e: SubmitEvent) {
-    e.preventDefault()
-    if (!item || parsed === null) return
-    store.addWeigh(item.id, parsed, finish)
-    savedId = item.weighs.at(-1)!.id
-    grams = ''
-    finish = false
-  }
-
-  async function copyGrams(n: number, weighId: string) {
-    if (await copy(String(n))) {
-      toast.show(`Copied ${n}`)
-      const w = item?.weighs.find((w) => w.id === weighId)
-      if (w && !w.logged) store.toggleLogged(id, weighId)
-    } else toast.show('Copy failed')
+  function save(finish = false, value = grams) {
+    if (!item || value === null) return
+    saveWeigh(item.id, value, finish)
   }
 
   function remove() {
@@ -51,225 +41,207 @@
 </script>
 
 {#if !item}
-  <p class="muted">This item no longer exists. <a href="#/">Back</a></p>
+  <div class="screen">
+    <div class="bar"><a href="#/" class="link">‹ Scale</a></div>
+    <p class="muted gone">This item no longer exists.</p>
+  </div>
 {:else}
-  <div class="head">
-    <a href="#/" class="link back">‹ Back</a>
-    <button class="link" onclick={() => (editing = !editing)}>{editing ? 'Done' : 'Edit'}</button>
-  </div>
-
-  {#if editing}
-    <div class="card">
-      <label class="field">
-        <span>Name</span>
-        <input value={item.name} oninput={(e) => store.update(item.id, { name: e.currentTarget.value })} />
-      </label>
-      <BarcodeField bind:value={() => item.barcode, (v) => store.update(item.id, { barcode: v })} />
-      <button class="btn block danger" onclick={remove}>Delete item</button>
+  <div class="screen">
+    <div class="bar">
+      <a href="#/" class="link">‹ Scale</a>
+      <span class="row actions">
+        {#if item.barcode && !editing}
+          <button class="link dim" onclick={() => (showBarcode = true)}>Barcode</button>
+          <span class="muted">·</span>
+        {/if}
+        <button class="link" class:dim={!editing} onclick={() => (editing = !editing)}>{editing ? 'Done' : 'Edit'}</button>
+      </span>
     </div>
-  {:else}
-    <h1>{item.name}</h1>
-  {/if}
 
-  <div class="stats">
-    <div><span class="muted">Now</span><b>{fmtGrams(lastWeight(item))}</b></div>
-    <div><span class="muted">Started</span><b>{fmtGrams(item.weighs[0].grams)}</b></div>
-    <div><span class="muted">Eaten</span><b>{fmtGrams(totalEaten(item))}</b></div>
-  </div>
+    <div class="slip">
+      <Receipt>
+        <div class="r-row">
+          <span class="r-name">{item.name}</span>
+          {#if item.barcode}<span class="r-dim">EAN …{item.barcode.value.slice(-4)}</span>{/if}
+        </div>
+        <div class="r-rule"></div>
+        <div class="lines">
+          <div class="r-row r-dim">
+            <span>{fmtStamp(item.weighs[0].at)} · start</span><span>{fmtNum(item.weighs[0].grams)} g</span>
+          </div>
+          {#each item.weighs.slice(1) as w, i (w.id)}
+            {@const eaten = eatenAt(item, i + 1)}
+            <div class="r-row line">
+              <button class="toggle" onclick={() => store.toggleLogged(id, w.id)} aria-label="Toggle logged">
+                <span>{fmtStamp(w.at, true)}{item.finishedAt === w.at ? ' · end' : ''}</span>
+                <span>{eaten < 0 ? '+' : '−'}{fmtNum(Math.abs(eaten))} g {w.logged ? '✓' : '·'}</span>
+              </button>
+              {#if editing}
+                <button class="x" aria-label="Remove weigh" onclick={() => store.removeWeigh(id, w.id)}>✕</button>
+              {/if}
+            </div>
+          {/each}
+          {#if preview !== null && grams !== null}
+            <div class="r-row r-now">
+              <span>NOW {fmtTime(now)}</span>
+              <span>{fmtNum(grams)} g → {preview < 0 ? '+' : '−'}{fmtNum(Math.abs(preview))} g</span>
+            </div>
+          {/if}
+        </div>
+        <div class="r-rule"></div>
+        <div class="r-row">
+          <span>EATEN TOTAL</span><span class="total">{fmtNum(total)} g</span>
+        </div>
+      </Receipt>
+    </div>
 
-  {#if item.barcode}
-    <button class="btn block" onclick={() => (showBarcode = true)}>Show barcode</button>
-  {/if}
+    {#if editing}
+      <div class="edit">
+        <label class="field">
+          <span class="label">Name</span>
+          <input value={item.name} oninput={(e) => store.update(item.id, { name: e.currentTarget.value })} />
+        </label>
+        <BarcodeField bind:value={() => item.barcode, (v) => store.update(item.id, { barcode: v })} />
+        <p class="muted hint">Tap a line on the slip to toggle logged, ✕ to remove it.</p>
+        <button class="btn block danger" onclick={remove}>Delete item</button>
+      </div>
+    {:else if item.finishedAt}
+      <div class="bottom">
+        <div class="finished">
+          <span>Finished {fmtWhen(item.finishedAt)}</span>
+          <button class="link" onclick={() => store.reopen(item.id)}>Reopen</button>
+        </div>
+      </div>
+    {:else}
+      <div class="now">
+        <span class="label">Weight now</span>
+        <span class="num mono" class:dim={!typed}>{typed || fmtNum(lastWeight(item))}<span class="unit">&nbsp;g</span></span>
+      </div>
 
-  {#if saved}
-    <div class="card result">
-      <div class="muted">Eaten</div>
-      <div class="big">{fmtGrams(saved.eaten)}</div>
-      <div class="row">
-        <button class="btn primary grow" onclick={() => copyGrams(saved.eaten, saved.weigh.id)}>Copy {saved.eaten}</button>
-        <button class="btn grow" onclick={() => store.toggleLogged(id, saved.weigh.id)}>
-          {saved.weigh.logged ? '✓ Logged' : 'Mark logged'}
+      <div class="bottom">
+        <div class="row">
+          <button class="btn grow small" disabled={grams === null} onclick={() => save(true)}>Empty pack · finish</button>
+          <button class="btn grow small" onclick={() => save(true, 0)}>It's gone (0 g)</button>
+        </div>
+        <Numpad bind:value={typed} size={52} onenter={() => save()} />
+        <button class="btn primary block" class:warn={preview !== null && preview < 0} disabled={grams === null} onclick={() => save()}>
+          {#if preview === null}
+            Type the weight now
+          {:else if preview < 0}
+            Heavier by {fmtNum(-preview)} g · save anyway
+          {:else}
+            Save &amp; copy {fmtNum(preview)}
+          {/if}
         </button>
       </div>
-    </div>
-  {/if}
-
-  {#if item.finishedAt}
-    <div class="card finished">
-      <span>Finished {fmtWhen(item.finishedAt)}</span>
-      <button class="link" onclick={() => store.reopen(item.id)}>Reopen</button>
-    </div>
-  {:else}
-    <form class="card" onsubmit={submit}>
-      <label class="field">
-        <span>Weight now (g)</span>
-        <input bind:value={grams} inputmode="decimal" placeholder={String(lastWeight(item))} />
-      </label>
-      {#if preview !== null}
-        <p class="preview" class:warn={preview < 0}>
-          {#if preview < 0}
-            Heavier than last time (+{fmtGrams(-preview)}). Wrong item or refilled?
-          {:else}
-            You ate <b>{fmtGrams(preview)}</b>
-          {/if}
-        </p>
-      {/if}
-      <label class="check">
-        <input type="checkbox" bind:checked={finish} />
-        <span>Finished. This is the empty packaging (use 0 if it's gone)</span>
-      </label>
-      <button class="btn primary block" disabled={parsed === null}>{finish ? 'Save & finish' : 'Save weigh'}</button>
-    </form>
-  {/if}
-
-  <h2>Weighs</h2>
-  <ul class="weighs">
-    {#each item.weighs.toReversed() as w, ri (w.id)}
-      {@const i = item.weighs.length - 1 - ri}
-      <li class:unlogged={i > 0 && !w.logged}>
-        <div class="grow">
-          <div>{fmtGrams(w.grams)} <span class="muted">· {fmtWhen(w.at)}</span></div>
-          {#if i === 0}<div class="muted small">start</div>{/if}
-        </div>
-        {#if i > 0}
-          {@const eaten = eatenAt(item, i)}
-          <button class="pill" onclick={() => copyGrams(eaten, w.id)} title="Copy">−{fmtGrams(eaten)}</button>
-          <button class="tick" class:on={w.logged} aria-label="Toggle logged" onclick={() => store.toggleLogged(id, w.id)}>✓</button>
-          {#if editing}
-            <button class="link danger-text" onclick={() => store.removeWeigh(id, w.id)}>✕</button>
-          {/if}
-        {/if}
-      </li>
-    {/each}
-  </ul>
+    {/if}
+  </div>
 
   {#if showBarcode && item.barcode}
-    <BarcodeView code={item.barcode} name={item.name} onclose={() => (showBarcode = false)} />
+    <BarcodeView code={item.barcode} name={item.name} eaten={lastEaten} onclose={() => (showBarcode = false)} />
   {/if}
 {/if}
 
 <style>
-  .head {
-    display: flex;
-    justify-content: space-between;
+  .gone {
+    padding: 20px;
   }
-  .back {
-    text-decoration: none;
-    padding-left: 0;
+  .actions {
+    gap: 6px;
   }
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    margin: 12px 0;
-  }
-  .stats div {
+  .slip {
+    margin: 16px 16px 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    background: var(--surface);
-    border: 1px solid var(--border);
+  }
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 30vh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* room for the NOW row's bleed */
+    margin: 0 -6px;
+    padding: 0 6px;
+  }
+  .line {
+    gap: 8px;
+  }
+  .toggle {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+  .x {
+    background: none;
+    border: none;
+    padding: 0 2px;
+    color: var(--danger);
+    font: inherit;
+  }
+  .total {
+    font-size: 26px;
+    font-weight: 600;
+  }
+  .now {
+    padding: 14px 20px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .num {
+    font-size: 44px;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .num.dim {
+    color: var(--digit-dim);
+  }
+  .unit {
+    font-size: 20px;
+    color: var(--muted);
+  }
+  .small {
+    min-height: 44px;
     border-radius: 12px;
-    padding: 10px 12px;
+    font-size: 14px;
+    color: var(--text-2);
   }
-  .stats span {
-    font-size: 0.85rem;
-  }
-  .stats b {
-    font-size: 1.15rem;
-    font-variant-numeric: tabular-nums;
-  }
-  .card {
-    margin-top: 12px;
-  }
-  .result {
-    border-color: var(--accent);
-    text-align: center;
-  }
-  .big {
-    font-size: 2.6rem;
-    font-weight: 800;
-    margin-bottom: 12px;
-    font-variant-numeric: tabular-nums;
+  .btn.primary.warn {
+    background: var(--warn);
+    border-color: var(--warn);
   }
   .finished {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
   }
-  .preview {
-    margin: -4px 0 12px;
-    font-size: 1.1rem;
-  }
-  .preview.warn {
-    color: var(--warn);
-  }
-  .check {
+  .edit {
+    padding: 20px;
     display: flex;
+    flex-direction: column;
     gap: 10px;
-    align-items: flex-start;
-    margin-bottom: 14px;
-    color: var(--muted);
   }
-  .check input {
-    width: 22px;
-    height: 22px;
-    flex: none;
+  .edit .field {
     margin: 0;
-    accent-color: var(--accent);
   }
-  .weighs {
-    list-style: none;
-    padding: 0;
+  .hint {
     margin: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-  .weighs li {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-top: 1px solid var(--border);
-  }
-  .weighs li:first-child {
-    border-top: none;
-  }
-  .unlogged {
-    background: var(--unlogged);
-  }
-  .small {
-    font-size: 0.85rem;
-  }
-  .pill {
-    border: 1px solid var(--border);
-    background: var(--bg);
-    border-radius: 999px;
-    padding: 6px 12px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    cursor: pointer;
-  }
-  .tick {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 2px solid var(--muted);
-    background: none;
-    color: transparent;
-    font-weight: 800;
-    cursor: pointer;
-  }
-  .tick.on {
-    border-color: var(--good);
-    background: var(--good);
-    color: var(--surface);
+    font-size: 13px;
   }
   .danger {
-    color: #e03131;
-  }
-  .danger-text {
-    color: #e03131;
+    color: var(--danger);
+    margin-top: 8px;
   }
 </style>

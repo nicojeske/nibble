@@ -13,13 +13,16 @@
   }
 </script>
 
-<label class="field">
-  <span>Barcode (optional)</span>
-  <div class="row">
-    <input class="grow" inputmode="numeric" placeholder="Scan or type" value={value?.value ?? ''} oninput={onInput} />
-    <button type="button" class="btn" onclick={() => (scanning = true)}>Scan</button>
-  </div>
-</label>
+<div class="barcode">
+  <input
+    class="mono"
+    inputmode="numeric"
+    aria-label="Barcode"
+    placeholder="Barcode (optional)"
+    value={value?.value ?? ''}
+    oninput={onInput} />
+  <button type="button" class="link" onclick={() => (scanning = true)}>{value ? 'Rescan' : 'Scan'}</button>
+</div>
 
 {#if scanning}
   <Scanner
@@ -28,6 +31,33 @@
       value = code
       onscan?.(code)
     }}
-    onclose={() => (scanning = false)}
-  />
+    onclose={() => (scanning = false)} />
 {/if}
+
+<style>
+  .barcode {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 14px;
+    border-radius: 14px;
+    background: var(--surface);
+  }
+  input {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: none;
+    padding: 12px 0;
+    font-size: 15px;
+    letter-spacing: 0.06em;
+  }
+  input::placeholder {
+    font-family: var(--sans);
+    letter-spacing: normal;
+    color: var(--muted);
+  }
+  .link {
+    font-size: 14px;
+  }
+</style>

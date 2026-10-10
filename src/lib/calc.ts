@@ -56,3 +56,48 @@ export function parseGrams(input: string): number | null {
 export function round(n: number): number {
   return Math.round(n * 10) / 10
 }
+
+export interface Match {
+  item: Item
+  delta: number
+}
+
+/**
+ * Open items that could weigh `grams` now, closest fit first. Items that would have
+ * got heavier can't be it, so they're returned separately as `hidden`.
+ */
+export function matches(items: Item[], grams: number): { fits: Match[]; hidden: Item[] } {
+  const fits: Match[] = []
+  const hidden: Item[] = []
+  for (const item of items) {
+    if (item.finishedAt) continue
+    const delta = round(lastWeight(item) - grams)
+    if (delta >= 0) fits.push({ item, delta })
+    else hidden.push(item)
+  }
+  fits.sort((a, b) => a.delta - b.delta)
+  return { fits, hidden }
+}
+
+export function todayTotal(items: Item[], now = Date.now()): number {
+  const key = dayKey(now)
+  return entries(items)
+    .filter((e) => dayKey(e.weigh.at) === key)
+    .reduce((sum, e) => round(sum + e.eaten), 0)
+}
+
+export function unloggedCount(items: Item[]): number {
+  return entries(items).filter((e) => !e.weigh.logged).length
+}
+
+/** Totals for the last `n` days including today, oldest first. Days without weighs are 0. */
+export function lastNDays(items: Item[], n: number, now = Date.now()): Day[] {
+  const byKey = new Map(groupByDay(entries(items)).map((d) => [d.key, d]))
+  const today = new Date(now)
+  const out: Day[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const key = dayKey(new Date(today.getFullYear(), today.getMonth(), today.getDate() - i).getTime())
+    out.push(byKey.get(key) ?? { key, total: 0, entries: [] })
+  }
+  return out
+}

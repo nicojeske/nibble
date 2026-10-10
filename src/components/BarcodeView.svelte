@@ -2,10 +2,10 @@
   import JsBarcode from 'jsbarcode'
   import { jsBarcodeFormat } from '../lib/barcode'
   import type { Barcode } from '../lib/types'
-  import { copy } from '../lib/util'
+  import { copy, fmtNum } from '../lib/util'
   import { toast } from '../lib/toast.svelte'
 
-  let { code, name, onclose }: { code: Barcode; name: string; onclose: () => void } = $props()
+  let { code, name, eaten, onclose }: { code: Barcode; name: string; eaten?: number; onclose: () => void } = $props()
 
   let svg: SVGSVGElement
 
@@ -19,19 +19,29 @@
     }
   })
 
-  async function copyDigits(e: MouseEvent) {
+  async function copyText(e: MouseEvent, text: string, done: string) {
     e.stopPropagation()
-    toast.show((await copy(code.value)) ? 'Barcode copied' : 'Copy failed')
+    toast.show((await copy(text)) ? done : 'Copy failed')
   }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div class="overlay" role="dialog" aria-label="Barcode" tabindex="-1" onclick={onclose}>
+  <div class="top">
+    <span class="hint">Tap anywhere to close</span>
+    <button class="close" aria-label="Close" onclick={onclose}>✕</button>
+  </div>
   <div class="name">{name}</div>
   <svg bind:this={svg}></svg>
-  <div class="digits">{code.value}</div>
-  <button class="btn" onclick={copyDigits}>Copy number</button>
-  <div class="hint">Tap anywhere to close</div>
+  <div class="digits mono">{code.value}</div>
+  <div class="actions">
+    <button class="btn light" onclick={(e) => copyText(e, code.value, 'Barcode copied')}>Copy number</button>
+    {#if eaten !== undefined && eaten > 0}
+      <button class="btn dark" onclick={(e) => copyText(e, String(eaten), `Copied ${fmtNum(eaten)}`)}>
+        Copy {fmtNum(eaten)} g
+      </button>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -44,32 +54,60 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 16px;
-    padding: 16px;
+    padding: calc(16px + env(safe-area-inset-top)) 16px calc(20px + env(safe-area-inset-bottom));
+  }
+  .top {
+    align-self: stretch;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 15px;
+  }
+  .hint {
+    color: #777;
+  }
+  .close {
+    background: none;
+    border: none;
+    color: #000;
+    font-weight: 600;
+    padding: 4px;
+  }
+  .name {
+    margin-top: auto;
+    font-weight: 600;
+    font-size: 22px;
+    text-align: center;
   }
   svg {
+    margin-top: 24px;
     width: 100%;
     max-width: 560px;
     height: auto;
   }
-  .name {
-    font-weight: 600;
-    font-size: 1.2rem;
-    text-align: center;
-  }
   .digits {
-    font-family: ui-monospace, monospace;
-    font-size: 1.6rem;
+    margin-top: 20px;
+    font-size: 26px;
     letter-spacing: 0.15em;
   }
-  .btn {
+  .actions {
+    margin-top: auto;
+    align-self: stretch;
+    display: flex;
+    gap: 10px;
+  }
+  .actions .btn {
+    flex: 1;
+    min-height: 60px;
+  }
+  .light {
     background: #f1f1f1;
     color: #000;
     border-color: #ddd;
   }
-  .hint {
-    color: #777;
-    font-size: 0.9rem;
+  .dark {
+    background: #000;
+    color: #fff;
+    border-color: #000;
   }
 </style>

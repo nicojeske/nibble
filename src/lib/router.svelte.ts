@@ -1,6 +1,6 @@
 function parse() {
-  const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean)
-  return { name: parts[0] ?? 'home', param: parts[1] }
+  const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(decodeURIComponent)
+  return { name: parts[0] ?? 'home', param: parts[1], params: parts.slice(1) }
 }
 
 class Router {
