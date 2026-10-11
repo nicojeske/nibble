@@ -107,6 +107,9 @@
       </button>
     {:else if found}
       <button class="btn primary block" onclick={newItem}>Start new item at {fmtNum(grams ?? 0)} g</button>
+    {:else}
+      <!-- Keeps the slot reserved so the pad doesn't jump when the first digit lands. -->
+      <button class="btn primary block" disabled>Type a weight</button>
     {/if}
   </div>
 </div>
